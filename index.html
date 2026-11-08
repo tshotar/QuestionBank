@@ -1,3 +1,4 @@
+<meta name="build" content="20261108-3">
 <title>QBank</title>
 <meta name="apple-mobile-web-app-title" content="QBank">
 <meta name="application-name" content="QBank">
@@ -64,13 +65,16 @@ h2{font-size:17px;font-weight:700;margin:0 0 12px}
 .tiles.two{grid-template-columns:repeat(2,1fr)}
 
 /* filter tabs */
-.tabs{display:flex;flex-wrap:wrap;gap:4px 22px;align-items:flex-end;padding-right:56px;position:relative;margin-bottom:12px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:flex-end;padding-right:94px;position:relative;margin-bottom:12px}
 .tab{background:none;border:0;padding:8px 0 9px;font-size:17px;font-weight:700;color:var(--muted);border-bottom:3px solid transparent;display:flex;gap:6px;align-items:center}
 .tab[aria-selected="true"]{color:var(--accent-ink);border-bottom-color:#2cd0be}
 .tab .n{background:var(--accent);color:var(--on-accent);border-radius:999px;font-size:11px;padding:1px 7px;font-weight:800}
-.refresh{background:none;border:0;padding:8px 4px 9px;border-bottom:3px solid transparent;color:var(--muted);display:grid;place-items:center}
-.refresh svg{width:20px;height:20px}
-.refresh:hover,.refresh:active{color:var(--accent-ink)}
+.refresh{position:absolute;right:50px;top:2px;width:40px;height:40px;border-radius:13px;border:2px solid var(--line);background:var(--surface);color:var(--accent-ink);display:grid;place-items:center;padding:0;transition:background .15s,border-color .15s,transform .1s}
+.refresh svg{width:21px;height:21px}
+.refresh:hover{background:var(--accent-soft);border-color:var(--accent)}
+.refresh:active{transform:scale(.94);background:var(--accent-soft)}
+.refresh svg.spin{animation:spin .55s cubic-bezier(.3,.7,.3,1)}
+@keyframes spin{to{transform:rotate(360deg)}}
 .collapse{position:absolute;right:0;top:0;width:44px;height:44px;border-radius:14px;border:2px solid var(--line);background:var(--surface);color:var(--accent-ink);display:grid;place-items:center}
 .collapse svg{width:22px;height:22px;transition:transform .2s}
 .collapse[aria-expanded="false"] svg{transform:rotate(180deg)}
@@ -223,6 +227,7 @@ html.fit .app{height:100%}
 .qlist button{display:flex;gap:10px;align-items:center;text-align:left;width:100%;border:0;background:var(--surface);box-shadow:var(--shadow);border-radius:16px;padding:13px 16px;min-width:0}
 .qlist .q{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:14.5px}
 @media (max-width:420px){h1{font-size:25px}.types{gap:10px 8px}.chk{font-size:15px;gap:10px}.tab{font-size:16px}.stem{font-size:18px}}
+@media (max-width:400px){.tab{font-size:15px}.tabs{gap:4px 10px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}.enter{animation:none}}
 </style>
 
@@ -387,8 +392,8 @@ function renderTabs(){
     box.insertBefore(b,col);
   });
   const rf=document.createElement('button');rf.className='refresh';rf.setAttribute('aria-label','Deselect everything');rf.title='Deselect everything';
-  rf.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>';
-  rf.onclick=()=>{Object.values(sel).forEach(S=>S.clear());types.clear();types.add('a');query='';resetK=null;renderTabs();renderPanel();renderTypes();updateCount()};
+  rf.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>';
+  rf.onclick=()=>{Object.values(sel).forEach(S=>S.clear());types.clear();types.add('a');query='';resetK=null;renderTabs();renderPanel();renderTypes();updateCount();const ns=$('.refresh svg');if(ns)ns.classList.add('spin')};
   box.insertBefore(rf,col);
   col.setAttribute('aria-expanded',String(open));
 }
@@ -462,9 +467,11 @@ $('#collapse').onclick=()=>{open=!open;renderTabs();renderPanel()};
 function renderAll(){renderStats();renderResume();renderTabs();renderPanel();renderTypes();updateCount()}
 
 /* ---------- views ---------- */
+let updatePending=false;
 const vs={gen:$('#vGen'),list:$('#vList'),quiz:$('#vQuiz'),res:$('#vRes')};
 function pulse(el){el.classList.remove('enter');void el.offsetWidth;el.classList.add('enter')}
-function show(n){Object.entries(vs).forEach(([k,e])=>e.hidden=k!==n);document.documentElement.classList.toggle('fit',n==='res');window.scrollTo(0,0);pulse(vs[n])}
+function show(n){if(n==='gen'&&updatePending)return location.reload();
+  Object.entries(vs).forEach(([k,e])=>e.hidden=k!==n);document.documentElement.classList.toggle('fit',n==='res');window.scrollTo(0,0);pulse(vs[n])}
 
 /* ---------- search ---------- */
 let hay=null,qsT;
@@ -694,10 +701,10 @@ $('#rNew').onclick=()=>{quiz=null;cur=null;renderAll();show('gen')};
 
 /* ---------- cloud sync (Supabase, username only) ---------- */
 /* Fill these in to turn on username sync across devices. Leave empty to keep the app local-only. */
-const SYNC={url:'https://osiqrziopcebnpwwzkxv.supabase.co',key:'sb_publishable_Z_GBWqe794TCQlyTfEmReQ_T9pYnPJQ'};
+const SYNC={url:'',key:''};
 const syncOn=/^https:\/\//.test(SYNC.url)&&SYNC.key.length>20;
 const UKEY='musawi-qbank-uid',NKEY='musawi-qbank-user';
-let user=null,syncMsg='',syncT,syncBusy=false,syncAgain=false,lastSent='',authOpen=false,authMsg='',authBusy=false;
+let restoreNext=false,user=null,syncMsg='',syncT,syncBusy=false,syncAgain=false,lastSent='',authOpen=false,authMsg='',authBusy=false;
 async function rpc(fn,args){
   const r=await fetch(SYNC.url.replace(/\/+$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'apikey':SYNC.key,'Content-Type':'application/json'},body:JSON.stringify(args)});
   if(!r.ok){let m='';try{m=(await r.json()).message||''}catch(e){}throw new Error(m||('Server error '+r.status))}
@@ -705,9 +712,15 @@ async function rpc(fn,args){
 }
 const cleanName=n=>String(n||'').trim().toLowerCase().replace(/\s+/g,' ');
 function pushSoon(){if(!user)return;clearTimeout(syncT);syncT=setTimeout(syncNow,2500)}
-function mergeData(r){
+function mergeData(r,restore){
   const rs=r.store||{};
-  for(const id in rs){const a=store[id],b=rs[id];if(!a||(b.u||0)>(a.u||0)){store[id]=b;const {u,...x}=b;snap[id]=JSON.stringify(x)}}
+  for(const id in rs){
+    const a=store[id],b=rs[id],keep=(e)=>{e.u=Date.now();const {u,...x}=e;snap[id]=JSON.stringify(x)};
+    if(!a||(b.u||0)>(a.u||0)){
+      store[id]=b;
+      if(restore&&a&&a.s&&!b.s){b.s=a.s;b.a=a.a;keep(b)}else{const {u,...x}=b;snap[id]=JSON.stringify(x)}
+    }else if(restore&&b.s&&!a.s){a.s=b.s;a.a=b.a;keep(a)}
+  }
   for(const b of (r.sessions||[])){
     const i=sessions.findIndex(x=>x.sid===b.sid);
     if(i<0)sessions.push(b);else if((b.t||0)>(sessions[i].t||0))sessions[i]=b;
@@ -717,10 +730,11 @@ function mergeData(r){
 async function syncNow(){
   if(!user)return;
   if(syncBusy){syncAgain=true;return}
+  const restore=restoreNext;restoreNext=false;
   syncBusy=true;syncMsg='Syncing…';renderAcct();
   try{
     const remote=await rpc('progress_get',{p_name:user});
-    if(remote&&typeof remote==='object')mergeData(remote);
+    if(remote&&typeof remote==='object')mergeData(remote,restore);
     stamp();rawSave();rawSaveSess();
     const blob={v:1,store,sessions},str=JSON.stringify(blob);
     if(str!==lastSent){await rpc('progress_save',{p_name:user,p_data:blob});lastSent=str}
@@ -737,6 +751,7 @@ async function startSession(name){
   }
   try{localStorage.setItem(UKEY,name);localStorage.setItem(NKEY,name)}catch(e){}
   user=name;authOpen=false;authMsg='';
+  restoreNext=true;
   await syncNow();
 }
 async function auth(create){
@@ -783,7 +798,24 @@ function initSync(){
   let n=null;try{n=localStorage.getItem(NKEY)}catch(e){}
   if(n){user=n;renderAcct();syncNow()}else renderAcct();
 }
-document.addEventListener('visibilitychange',()=>syncNow());
+document.addEventListener('visibilitychange',()=>{syncNow();if(document.visibilityState==='visible')checkUpdate()});
+/* ---------- auto-update: reload when a newer build is published ---------- */
+const BUILD='20261108-3';
+async function checkUpdate(){
+  try{
+    if(!/^https?:$/.test(location.protocol))return;
+    const r=await fetch(location.pathname,{cache:'no-store',headers:{Range:'bytes=0-2047'}});
+    const rd=r.body.getReader(),{value}=await rd.read();rd.cancel();
+    const m=/<meta name="build" content="([^"]+)"/.exec(new TextDecoder().decode(value||new Uint8Array()));
+    if(!m||m[1]===BUILD)return;
+    const last=+(localStorage.getItem('musawi-qbank-upd')||0);
+    if(Date.now()-last<120000)return; /* avoid reload loops if a CDN is slow */
+    localStorage.setItem('musawi-qbank-upd',String(Date.now()));
+    const f=await fetch(location.pathname,{cache:'reload'});await f.arrayBuffer();
+    if(!vs.gen.hidden)location.reload();else updatePending=true;
+  }catch(e){}
+}
+setTimeout(checkUpdate,3000);
 window.addEventListener('online',()=>syncNow());
 setInterval(()=>{if(document.visibilityState==='visible')syncNow()},90000);
 
