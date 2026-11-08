@@ -58,6 +58,8 @@ h2{font-size:17px;font-weight:700;margin:0 0 12px}
 .tile b{display:block;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
 .tile span{font-size:12px;font-weight:700;color:var(--muted)}
 .tile.ok b{color:var(--good)}.tile.no b{color:var(--bad)}.tile.mk b{color:var(--warn)}
+.tiles.top3{grid-template-columns:repeat(4,1fr)}
+.tile.nt b{color:var(--accent-ink)}
 .tiles.top3 .tile{background:var(--surface);box-shadow:var(--shadow)}
 .tiles.two{grid-template-columns:repeat(2,1fr)}
 
@@ -136,7 +138,8 @@ h2{font-size:17px;font-weight:700;margin:0 0 12px}
 .opt[data-s="ok"] .k{background:var(--good);color:#fff}
 .opt[data-s="no"]{border-color:var(--bad);background:var(--bad-soft)}
 .opt[data-s="no"] .k{background:var(--bad);color:#fff}
-.opt[disabled]{cursor:default}
+.opt{user-select:none;-webkit-user-select:none}
+.opt[aria-disabled="true"]{cursor:default}
 .verdict{display:flex;gap:8px;align-items:center;font-weight:800;margin:16px 0 8px}
 .verdict.ok{color:var(--good)}.verdict.no{color:var(--bad)}
 .expl{background:var(--surface2);border-radius:16px;padding:14px 16px;font-family:var(--f-read);font-size:16px;line-height:1.55;overflow-wrap:anywhere}
@@ -153,7 +156,7 @@ h2{font-size:17px;font-weight:700;margin:0 0 12px}
 .rsm{display:flex;flex-direction:column;gap:8px}
 .rsm .it{display:flex;gap:8px;align-items:stretch}
 .rsm .go{flex:1;display:flex;flex-direction:column;gap:3px;text-align:left;border:1.5px solid var(--line);background:var(--surface2);border-radius:14px;padding:11px 14px;min-width:0}
-.rsm .go b{font-size:15px;font-weight:700}
+.rsm .go b{font-size:15px;font-weight:700;overflow-wrap:anywhere}
 .rsm .go span{font-size:12.5px;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
 .rsm .go .prog{height:6px;margin-top:4px}
 .rsm .x{flex:none;width:44px;border:1.5px solid var(--line);background:var(--surface);border-radius:14px;color:var(--muted);font-size:20px;line-height:1}
@@ -318,7 +321,7 @@ const answered=q=>{const s=store[q.id];return !!(s&&(s.s==='c'||s.s==='i'))};
 /* ---------- filter state ---------- */
 const TABS=[['qbanks','QBanks'],['subjects','Subjects'],['topics','Topics']];
 const sel={qbanks:new Set(),subjects:new Set(),topics:new Set()};
-const TYPES=[['m','Marked Questions'],['c','Correct Questions'],['i','Incorrect Questions'],['a','All Questions']];
+const TYPES=[['m','Marked Questions'],['c','Correct Questions'],['i','Incorrect Questions'],['u','Unanswered Questions'],['a','All Questions']];
 const types=new Set(['a']);
 let tab='qbanks',open=true,query='',resetK=null;
 
@@ -329,12 +332,13 @@ function items(key){
   const c=m(DATA.topics.length);Q.forEach(q=>c[q.t]++);
   return DATA.topics.map((t,k)=>({k,l:t.n,n:c[k]}));
 }
-const ITEMS={};TABS.forEach(([k])=>ITEMS[k]=items(k));
+const cmp=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'});
+const ITEMS={};TABS.forEach(([k])=>ITEMS[k]=items(k).sort((x,y)=>cmp(x.l,y.l)));
 
 function matchType(q){
   if(types.size===0||types.has('a'))return true;
   const s=store[q.id]||{};
-  return (types.has('m')&&s.m)||(types.has('c')&&s.s==='c')||(types.has('i')&&s.s==='i');
+  return (types.has('m')&&s.m)||(types.has('c')&&s.s==='c')||(types.has('i')&&s.s==='i')||(types.has('u')&&s.s!=='c'&&s.s!=='i');
 }
 function eligible(){
   return Q.filter(q=>{
@@ -347,13 +351,13 @@ function eligible(){
 
 /* ---------- home ---------- */
 function counts(){
-  let c=0,i=0,m=0;
-  for(const id in store){if(!byId.has(id))continue;const s=store[id];if(s.s==='c')c++;else if(s.s==='i')i++;if(s.m)m++}
-  return{c,i,m};
+  let c=0,i=0,m=0,n=0;
+  for(const id in store){if(!byId.has(id))continue;const s=store[id];if(s.s==='c')c++;else if(s.s==='i')i++;if(s.m)m++;if(s.n)n++}
+  return{c,i,m,n};
 }
 function renderStats(){
   const n=counts();
-  $('#stats').innerHTML=`<button class="tile ok" data-l="c"><b>${n.c}</b><span>Correct</span></button><button class="tile no" data-l="i"><b>${n.i}</b><span>Incorrect</span></button><button class="tile mk" data-l="m"><b>${n.m}</b><span>Marked</span></button>`;
+  $('#stats').innerHTML=`<button class="tile ok" data-l="c"><b>${n.c}</b><span>Correct</span></button><button class="tile no" data-l="i"><b>${n.i}</b><span>Incorrect</span></button><button class="tile mk" data-l="m"><b>${n.m}</b><span>Marked</span></button><button class="tile nt" data-l="n"><b>${n.n}</b><span>Notes</span></button>`;
   $('#stats').querySelectorAll('.tile').forEach(b=>b.onclick=()=>openList(b.dataset.l));
   $('#foot').innerHTML='<button class="link" id="rs">Reset all progress</button>';
   $('#rs').onclick=()=>{$('#foot').innerHTML='<span class="confirm">Erase every answer? Marks and notes stay.<button id="rsN">Cancel</button><button class="danger" id="rsY">Erase</button></span>';
@@ -472,11 +476,11 @@ function runSearch(){
 $('#qs').oninput=()=>{clearTimeout(qsT);qsT=setTimeout(runSearch,200)};
 
 /* ---------- lists: subjects -> questions ---------- */
-const LISTS={c:'Correct',i:'Incorrect',m:'Marked'};
+const LISTS={c:'Correct',i:'Incorrect',m:'Marked',n:'Noted'};
 const FLAGI='<svg class="fl" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>';
 const CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
 let listKind=null,listSub=null,askReset=null;
-const inList=(q,k)=>{const s=store[q.id]||{};return k==='m'?!!s.m:s.s===k};
+const inList=(q,k)=>{const s=store[q.id]||{};return k==='m'?!!s.m:k==='n'?!!s.n:s.s===k};
 const listQs=(k,sub)=>Q.filter(q=>inList(q,k)&&q.sub===sub);
 const plural=(n,w)=>n+' '+w+(n===1?'':'s');
 function openList(k){listKind=k;listSub=null;askReset=null;renderList();show('list')}
@@ -489,7 +493,8 @@ function renderSubjectList(){
   $('#lSub').textContent=total?plural(total,'question')+' · choose a subject':'';
   const body=$('#lBody');
   if(!total){body.innerHTML=`<div class="card empty">No ${LISTS[k].toLowerCase()} questions yet.</div>`;return}
-  body.innerHTML=c.map((n,s)=>n?`<button class="subbtn" data-s="${s}"><span class="nm">${esc(DATA.subjects[s])}</span><span class="n">${n}</span>${CHEV}</button>`:'').join('');
+  const order=DATA.subjects.map((l,s)=>s).sort((x,y)=>cmp(DATA.subjects[x],DATA.subjects[y]));
+  body.innerHTML=order.map(s=>{const n=c[s];return n?`<button class="subbtn" data-s="${s}"><span class="nm">${esc(DATA.subjects[s])}</span><span class="n">${n}</span>${CHEV}</button>`:''}).join('');
   body.querySelectorAll('.subbtn').forEach(b=>b.onclick=()=>{listSub=+b.dataset.s;askReset=null;renderList();pulse($('#lBody'));pulse($('#lTitle').parentNode);window.scrollTo(0,0)});
 }
 function renderSubjectPage(){
@@ -505,13 +510,13 @@ function renderSubjectPage(){
     const what=askReset==='kind'?LISTS[k].toLowerCase()+' answers':'answers';
     h+=`<span class="rconf">Reset ${nKind} ${what} in this subject?<button data-a="no">Cancel</button><button class="danger" data-a="yes">Reset</button></span>`;
   }else{
-    if(k!=='m'&&qs.length)h+=`<button class="rbtn" data-r="kind">Reset ${LISTS[k].toLowerCase()} (${qs.length})</button>`;
+    if((k==='c'||k==='i')&&qs.length)h+=`<button class="rbtn" data-r="kind">Reset ${LISTS[k].toLowerCase()} (${qs.length})</button>`;
     if(all)h+=`<button class="rbtn" data-r="all">Reset all answers (${all})</button>`;
   }
   h+='</div>';
   h+='<div class="qlist">'+qs.map((q,i)=>{
     const x=store[q.id]||{};
-    const tag=k==='m'?(x.s==='c'?'<span class="tag ok">Correct</span>':x.s==='i'?'<span class="tag no">Incorrect</span>':''):'';
+    const tag=(k==='m'||k==='n')?(x.s==='c'?'<span class="tag ok">Correct</span>':x.s==='i'?'<span class="tag no">Incorrect</span>':''):'';
     return `<button data-f="${i}"><span class="q">${esc(q.q)}</span>${x.n?'<span class="tag nt">Note</span>':''}${tag}</button>`;
   }).join('')+'</div>';
   if(!qs.length)h+=`<div class="card empty">No ${LISTS[k].toLowerCase()} questions left in this subject.</div>`;
@@ -561,7 +566,9 @@ function renderResume(){
   const rows=sessions.slice().sort((a,b)=>b.t-a.t).map(s=>{
     const tot=s.ids.length,done=s.a.filter(a=>a&&a[1]).length;
     if(askDrop===s.sid)return `<div class="it"><span class="confirm" style="flex:1">Discard this bundle?<button data-c="no">Cancel</button><button class="danger" data-c="yes" data-sid="${s.sid}">Discard</button></span></div>`;
-    return `<div class="it"><button class="go" data-sid="${s.sid}"><b>${plural(tot,'question')}</b><span>${done} of ${tot} answered · ${fmt(s.t)}</span><div class="prog"><i style="width:${done/tot*100}%"></i></div></button><button class="x" data-d="${s.sid}" aria-label="Discard bundle">×</button></div>`;
+    const nm=[...new Set(s.ids.map(id=>byId.get(id)).filter(Boolean).map(q=>DATA.subjects[q.sub]))].sort(cmp);
+    const title=nm.length<=2?nm.join(' · '):nm[0]+' · '+nm[1]+' +'+(nm.length-2)+' more';
+    return `<div class="it"><button class="go" data-sid="${s.sid}"><b>${esc(title)}</b><span>${plural(tot,'question')} · ${done} answered · ${fmt(s.t)}</span><div class="prog"><i style="width:${done/tot*100}%"></i></div></button><button class="x" data-d="${s.sid}" aria-label="Discard bundle">×</button></div>`;
   }).join('');
   box.innerHTML=`<h2>Continue</h2><div class="rsm">${rows}</div>`;
   box.querySelectorAll('.go').forEach(b=>b.onclick=()=>resumeSess(b.dataset.sid));
@@ -578,7 +585,7 @@ function resumeSess(sid){
 }
 
 /* ---------- quiz ---------- */
-let quiz=null,cur=null;
+let quiz=null,cur=null,lastTap=0,lastK=-1;
 function fromStore(q){
   const s=store[q.id];
   if(s&&(s.s==='c'||s.s==='i'))return{sel:s.a!=null?s.a:(s.s==='c'?q.k:-1),done:true};
@@ -603,7 +610,7 @@ function renderQ(){
     if(!t)return;
     let d='';
     if(reveal){d=k===q.k?'ok':(a.sel===k?'no':'')}else if(a.sel===k)d='sel';
-    h+=`<button class="opt" data-k="${k}" data-s="${d}" ${reveal?'disabled':''} role="radio" aria-checked="${a.sel===k}"><span class="k">${L[k]}</span><span class="tx">${esc(t)}</span></button>`;
+    h+=`<button class="opt" data-k="${k}" data-s="${d}" ${reveal?'aria-disabled="true"':''} role="radio" aria-checked="${a.sel===k}"><span class="k">${L[k]}</span><span class="tx">${esc(t)}</span></button>`;
   });
   h+='</div>';
   if(reveal){
@@ -618,7 +625,12 @@ function renderQ(){
   if(reveal||a.sel===null)h+=`<button class="btn sm ${reveal?'':'ghost'}" id="next">${last?(cur.back==='gen'?'Done':mode==='browse'?'Back to list':'Finish'):(reveal?'Next':'Skip')}</button>`;
   h+='</div>';
   $('#qCard').innerHTML=h;
-  $('#qCard').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{if(reveal)return;a.sel=+b.dataset.k;renderQ()});
+  $('#qCard').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    const k=+b.dataset.k,now=Date.now(),dbl=k===lastK&&now-lastTap<400;
+    lastK=k;lastTap=now;
+    if(!reveal){a.sel=k;if(dbl){lastTap=0;submit();return}renderQ()}
+    else if(dbl&&idx<list.length-1){lastTap=0;go(idx+1)}
+  });
   $('#note').oninput=e=>{const x=st(q.id);const v=e.target.value;if(v.trim())x.n=v;else delete x.n;saveSoon()};
   $('#flag').onclick=()=>{const x=st(q.id);x.m=!x.m;save();renderQ()};
   const pv=$('#prev');if(pv)pv.onclick=()=>go(idx-1);
@@ -634,8 +646,7 @@ function submit(){
 function go(i){save();cur.idx=i;renderQ();pulse($('#qCard'));window.scrollTo(0,0)}
 function renderNav(){
   const card=$('#qNavCard');
-  const mode0=cur.mode;
-  const on=cur.mode!=='browse'&&cur.list.length>1&&cur.list.length<=(mode0==='review'?3000:300);
+  const on=cur.list.length>1&&cur.list.length<=(cur.mode==='live'?300:3000);
   card.hidden=!on;if(!on)return;
   $('#qNav').innerHTML=cur.list.map((q,i)=>`<button data-i="${i}" data-s="${cur.ans[i].done?(cur.ans[i].sel===q.k?'ok':'no'):''}" aria-label="Question ${i+1}${(store[q.id]||{}).m?' (flagged)':''}" ${i===cur.idx?'aria-current="true"':''}>${i+1}${(store[q.id]||{}).m?FLAGI:''}</button>`).join('');
   $('#qNav').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
