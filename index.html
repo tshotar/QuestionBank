@@ -1,4 +1,4 @@
-<meta name="build" content="20261108-5">
+<meta name="build" content="20261108-7">
 <title>QBank</title>
 <meta name="apple-mobile-web-app-title" content="QBank">
 <meta name="application-name" content="QBank">
@@ -586,7 +586,7 @@ function renderResume(){
   box.hidden=false;
   const fmt=t=>new Date(t).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
   const rows=vis.slice().sort((a,b)=>b.t-a.t).map(s=>{
-    const tot=s.ids.length,done=s.a.filter(a=>a&&a[1]).length;
+    const tot=s.ids.length,done=s.ids.filter((id,i)=>(s.a[i]&&s.a[i][1])||(store[id]&&(store[id].s==='c'||store[id].s==='i'))).length;
     if(askDrop===s.sid)return `<div class="it"><span class="confirm" style="flex:1">Discard this bundle?<button data-c="no">Cancel</button><button class="danger" data-c="yes" data-sid="${s.sid}">Discard</button></span></div>`;
     const nm=[...new Set(s.ids.map(id=>byId.get(id)).filter(Boolean).map(q=>DATA.subjects[q.sub]))].sort(cmp);
     const title=nm.length<=2?nm.join(' · '):nm[0]+' · '+nm[1]+' +'+(nm.length-2)+' more';
@@ -595,7 +595,7 @@ function renderResume(){
   box.innerHTML=`<h2>Continue</h2><div class="rsm">${rows}</div>`;
   box.querySelectorAll('.go').forEach(b=>b.onclick=()=>resumeSess(b.dataset.sid));
   box.querySelectorAll('.x').forEach(b=>b.onclick=()=>{askDrop=b.dataset.d;renderResume()});
-  box.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{if(b.dataset.c==='yes')dropSess(b.dataset.sid);askDrop=null;renderResume()});
+  box.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{if(b.dataset.c==='yes')dropSess(b.dataset.sid);askDrop=null;renderResume();updateCount()});
 }
 function resumeSess(sid){
   const s=sessions.find(x=>x.sid===sid);if(!s)return;
@@ -620,8 +620,12 @@ $('#go').onclick=()=>{
   quiz={list,ans:list.map(()=>({sel:null,done:false})),idx:0,mode:'live',sid:Date.now().toString(36)+Math.random().toString(36).slice(2,6)};
   openCur(quiz);syncSess(true);
 };
+function adopt(c){ /* a question answered anywhere shows as answered in every bundle */
+  c.list.forEach((q,i)=>{const a=c.ans[i];if(!a.done&&answered(q)){const f=fromStore(q);a.sel=f.sel;a.done=true}});
+}
 function openCur(c){cur=c;show('quiz');renderQ()}
 function renderQ(){
+  adopt(cur);
   const {list,idx,ans,mode}=cur,q=list[idx],a=ans[idx],s=store[q.id]||{};
   const reveal=a.done;
   $('#qCount').textContent=(mode==='review'?'Review · ':'')+`Question ${idx+1} of ${list.length}`;
@@ -800,7 +804,7 @@ function initSync(){
 }
 document.addEventListener('visibilitychange',()=>{syncNow();if(document.visibilityState==='visible')checkUpdate()});
 /* ---------- auto-update: reload when a newer build is published ---------- */
-const BUILD='20261108-5';
+const BUILD='20261108-7';
 async function checkUpdate(){
   try{
     if(!/^https?:$/.test(location.protocol))return;
