@@ -153,6 +153,14 @@ h2{font-size:17px;font-weight:700;margin:0 0 12px}
 .flag svg{width:16px;height:16px}
 .flag[aria-pressed="true"]{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
 .btn.sm{font-size:15px;padding:12px 24px}
+.acct{padding:12px 16px}
+.acrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.acrow .em{flex:1;min-width:0;font-weight:700;font-size:14px;overflow-wrap:anywhere;display:flex;gap:8px;align-items:center}
+.acrow .em svg,.acopen svg{width:20px;height:20px;flex:none;color:var(--accent-ink)}
+.acrow .st{flex-basis:100%;font-size:12.5px;color:var(--muted);font-weight:600}
+.acopen{display:flex;gap:8px;align-items:center;background:none;border:0;padding:0;font-weight:700;font-size:14px;color:var(--ink);text-align:left}
+.acform{margin-top:12px}
+.acform .acts{margin-top:4px}
 .rsm{display:flex;flex-direction:column;gap:8px}
 .rsm .it{display:flex;gap:8px;align-items:stretch}
 .rsm .go{flex:1;display:flex;flex-direction:column;gap:3px;text-align:left;border:1.5px solid var(--line);background:var(--surface2);border-radius:14px;padding:11px 14px;min-width:0}
@@ -221,6 +229,8 @@ html.fit .app{height:100%}
 <div class="app">
 <!-- HOME / GENERATE -->
 <section id="vGen" class="app" aria-label="Generate quiz">
+  <div class="card acct" id="acct" hidden></div>
+
   <div class="tiles top3" id="stats"></div>
 
   <div class="card" id="resume" hidden></div>
@@ -312,7 +322,10 @@ const byId=new Map(Q.map(q=>[q.id,q]));
 /* store[id] = {s:'c'|'i' (answered), a:chosen option, m:marked, n:note} */
 let store={};
 try{store=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){store={}}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(store))}catch(e){}};
+const snap={};for(const id in store){const e=store[id],{u,...r}=e;snap[id]=JSON.stringify(r);if(!e.u)e.u=1}
+function stamp(){const now=Date.now();for(const id in store){const e=store[id],{u,...r}=e,j=JSON.stringify(r);if(snap[id]!==j){e.u=now;snap[id]=j}}}
+const rawSave=()=>{try{localStorage.setItem(KEY,JSON.stringify(store))}catch(e){}};
+const save=()=>{stamp();rawSave();pushSoon()};
 let saveT;const saveSoon=()=>{clearTimeout(saveT);saveT=setTimeout(save,400)};
 window.addEventListener('pagehide',save);
 const st=id=>store[id]||(store[id]={});
@@ -539,7 +552,8 @@ $('#lBack').onclick=()=>{
 /* ---------- saved bundles (continue later) ---------- */
 const SKEY='musawi-qbank-sessions-v1';
 let sessions=[];try{sessions=JSON.parse(localStorage.getItem(SKEY)||'[]')||[]}catch(e){sessions=[]}
-const saveSess=()=>{try{localStorage.setItem(SKEY,JSON.stringify(sessions))}catch(e){}};
+const rawSaveSess=()=>{try{localStorage.setItem(SKEY,JSON.stringify(sessions))}catch(e){}};
+const saveSess=()=>{rawSaveSess();pushSoon()};
 let sessT;
 function syncSess(now){
   if(!cur||cur.mode!=='live'||!cur.sid)return;
@@ -552,18 +566,19 @@ function syncSess(now){
   };
   clearTimeout(sessT);now?doIt():sessT=setTimeout(doIt,300);
 }
-function dropSess(sid){clearTimeout(sessT);sessions=sessions.filter(x=>x.sid!==sid);saveSess()}
+function dropSess(sid){clearTimeout(sessT);sessions=sessions.map(x=>x.sid===sid?{sid,del:1,t:Date.now()}:x);saveSess()}
 const flushAll=()=>{save();syncSess(true)};
+const ICLOUD='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4 4 0 0 1-.6-7.96A6 6 0 0 1 18 9.5a4.2 4.2 0 0 1-.5 8.5z"/></svg>';
 window.addEventListener('pagehide',flushAll);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushAll()});
 let askDrop=null;
 function renderResume(){
   const box=$('#resume');
-  sessions=sessions.filter(s=>s.ids&&s.ids.some(id=>byId.has(id)));
-  if(!sessions.length){box.hidden=true;box.innerHTML='';return}
+  const vis=sessions.filter(s=>!s.del&&s.ids&&s.ids.some(id=>byId.has(id)));
+  if(!vis.length){box.hidden=true;box.innerHTML='';return}
   box.hidden=false;
   const fmt=t=>new Date(t).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
-  const rows=sessions.slice().sort((a,b)=>b.t-a.t).map(s=>{
+  const rows=vis.slice().sort((a,b)=>b.t-a.t).map(s=>{
     const tot=s.ids.length,done=s.a.filter(a=>a&&a[1]).length;
     if(askDrop===s.sid)return `<div class="it"><span class="confirm" style="flex:1">Discard this bundle?<button data-c="no">Cancel</button><button class="danger" data-c="yes" data-sid="${s.sid}">Discard</button></span></div>`;
     const nm=[...new Set(s.ids.map(id=>byId.get(id)).filter(Boolean).map(q=>DATA.subjects[q.sub]))].sort(cmp);
@@ -677,6 +692,101 @@ $('#rRev').onclick=()=>{
 };
 $('#rNew').onclick=()=>{quiz=null;cur=null;renderAll();show('gen')};
 
+/* ---------- cloud sync (Supabase, username only) ---------- */
+/* Fill these in to turn on username sync across devices. Leave empty to keep the app local-only. */
+const SYNC={url:'https://osiqrziopcebnpwwzkxv.supabase.co',key:'sb_publishable_Z_GBWqe794TCQlyTfEmReQ_T9pYnPJQ'};
+const syncOn=/^https:\/\//.test(SYNC.url)&&SYNC.key.length>20;
+const UKEY='musawi-qbank-uid',NKEY='musawi-qbank-user';
+let user=null,syncMsg='',syncT,syncBusy=false,syncAgain=false,lastSent='',authOpen=false,authMsg='',authBusy=false;
+async function rpc(fn,args){
+  const r=await fetch(SYNC.url.replace(/\/+$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'apikey':SYNC.key,'Content-Type':'application/json'},body:JSON.stringify(args)});
+  if(!r.ok){let m='';try{m=(await r.json()).message||''}catch(e){}throw new Error(m||('Server error '+r.status))}
+  const t=await r.text();return t?JSON.parse(t):null;
+}
+const cleanName=n=>String(n||'').trim().toLowerCase().replace(/\s+/g,' ');
+function pushSoon(){if(!user)return;clearTimeout(syncT);syncT=setTimeout(syncNow,2500)}
+function mergeData(r){
+  const rs=r.store||{};
+  for(const id in rs){const a=store[id],b=rs[id];if(!a||(b.u||0)>(a.u||0)){store[id]=b;const {u,...x}=b;snap[id]=JSON.stringify(x)}}
+  for(const b of (r.sessions||[])){
+    const i=sessions.findIndex(x=>x.sid===b.sid);
+    if(i<0)sessions.push(b);else if((b.t||0)>(sessions[i].t||0))sessions[i]=b;
+  }
+  sessions=sessions.filter(x=>!x.del||Date.now()-(x.t||0)<30*864e5);
+}
+async function syncNow(){
+  if(!user)return;
+  if(syncBusy){syncAgain=true;return}
+  syncBusy=true;syncMsg='Syncing…';renderAcct();
+  try{
+    const remote=await rpc('progress_get',{p_name:user});
+    if(remote&&typeof remote==='object')mergeData(remote);
+    stamp();rawSave();rawSaveSess();
+    const blob={v:1,store,sessions},str=JSON.stringify(blob);
+    if(str!==lastSent){await rpc('progress_save',{p_name:user,p_data:blob});lastSent=str}
+    syncMsg='Synced '+new Date().toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+    if(!vs.gen.hidden&&!(document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName)))renderAll();
+  }catch(e){syncMsg='Offline – will retry when connected'}
+  syncBusy=false;renderAcct();
+  if(syncAgain){syncAgain=false;pushSoon()}
+}
+async function startSession(name){
+  let last=null;try{last=localStorage.getItem(UKEY)}catch(e){}
+  if(last&&last!==name){ /* different username on this device: don't mix data */
+    for(const k in store)delete store[k];for(const k in snap)delete snap[k];sessions=[];lastSent='';rawSave();rawSaveSess();
+  }
+  try{localStorage.setItem(UKEY,name);localStorage.setItem(NKEY,name)}catch(e){}
+  user=name;authOpen=false;authMsg='';
+  await syncNow();
+}
+async function auth(create){
+  const name=cleanName(($('#acE')||{}).value);
+  if(name.length<3||name.length>40){authMsg='Username must be 3 to 40 characters.';renderAcct();return}
+  authBusy=true;authMsg=create?'Creating…':'Signing in…';renderAcct();
+  try{
+    if(create){
+      stamp();
+      const ok=await rpc('progress_create',{p_name:name,p_data:{v:1,store,sessions}});
+      if(!ok){authMsg='That username is already taken. Pick another, or tap Sign in if it is yours.';authBusy=false;renderAcct();return}
+      lastSent=JSON.stringify({v:1,store,sessions});
+    }else{
+      const remote=await rpc('progress_get',{p_name:name});
+      if(remote===null){authMsg='No username like that yet. Tap Create username to make it.';authBusy=false;renderAcct();return}
+    }
+    authBusy=false;await startSession(name);
+  }catch(e){authBusy=false;authMsg=e&&e.message&&!/fetch|network|load failed/i.test(e.message)?e.message:'Could not reach the server. Check your connection.';renderAcct()}
+}
+function renderAcct(){
+  const box=$('#acct');
+  if(!syncOn){box.hidden=true;return}
+  box.hidden=false;
+  const ev=($('#acE')||{}).value||'';
+  let h='';
+  if(user){
+    h=`<div class="acrow"><span class="em">${ICLOUD}<span>${esc(user)}</span></span><button class="link" id="acSync">Sync now</button><button class="link" id="acOut">Sign out</button><span class="st">${esc(syncMsg||'Your progress syncs across devices')}</span></div>`;
+  }else if(!authOpen){
+    h=`<button class="acopen" id="acOpen">${ICLOUD}<span>Sign in to sync across devices</span></button>`;
+  }else{
+    h=`<button class="acopen" id="acOpen">${ICLOUD}<span>Sign in to sync across devices</span></button><div class="acform"><input class="search" id="acE" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Username" aria-label="Username"><div class="acts"><button class="btn sm" id="acIn" ${authBusy?'disabled':''}>Sign in</button><button class="btn ghost sm" id="acUp" ${authBusy?'disabled':''}>Create username</button></div><p class="hint" id="acMsg">${esc(authMsg)}</p><p class="hint">No password: anyone who types your username can open and change your progress. Pick something unique that others won't guess.</p></div>`;
+  }
+  box.innerHTML=h;
+  if($('#acE'))$('#acE').value=ev;
+  if($('#acOpen'))$('#acOpen').onclick=()=>{authOpen=!authOpen;authMsg='';renderAcct()};
+  if($('#acSync'))$('#acSync').onclick=syncNow;
+  if($('#acOut'))$('#acOut').onclick=()=>{user=null;clearTimeout(syncT);try{localStorage.removeItem(NKEY)}catch(e){}syncMsg='';renderAcct();renderAll()};
+  if($('#acIn'))$('#acIn').onclick=()=>auth(false);
+  if($('#acUp'))$('#acUp').onclick=()=>auth(true);
+  if($('#acE'))$('#acE').onkeydown=e=>{if(e.key==='Enter')auth(false)};
+}
+function initSync(){
+  if(!syncOn)return;
+  let n=null;try{n=localStorage.getItem(NKEY)}catch(e){}
+  if(n){user=n;renderAcct();syncNow()}else renderAcct();
+}
+document.addEventListener('visibilitychange',()=>syncNow());
+window.addEventListener('online',()=>syncNow());
+setInterval(()=>{if(document.visibilityState==='visible')syncNow()},90000);
+
 document.addEventListener('keydown',e=>{
   if(!cur||vs.quiz.hidden||e.target.matches('input,textarea'))return;
   const a=cur.ans[cur.idx],q=cur.list[cur.idx];
@@ -686,5 +796,6 @@ document.addEventListener('keydown',e=>{
 });
 ['gesturestart','gesturechange','gestureend'].forEach(n=>document.addEventListener(n,e=>e.preventDefault()));
 renderAll();
+initSync();
 })();
 </script>
