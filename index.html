@@ -1,4 +1,4 @@
-<meta name="build" content="20261108-3">
+<meta name="build" content="20261108-5">
 <title>QBank</title>
 <meta name="apple-mobile-web-app-title" content="QBank">
 <meta name="application-name" content="QBank">
@@ -700,8 +700,8 @@ $('#rRev').onclick=()=>{
 $('#rNew').onclick=()=>{quiz=null;cur=null;renderAll();show('gen')};
 
 /* ---------- cloud sync (Supabase, username only) ---------- */
-/* Fill these in to turn on username sync across devices. Leave empty to keep the app local-only. */
-const SYNC={url:'',key:''};
+/* Sync settings come from sync-config.js (next to this file), so updating this file never wipes them. */
+const SYNC=window.SYNC_CONFIG||{url:'https://osiqrziopcebnpwwzkxv.supabase.co',key:'sb_publishable_Z_GBWqe794TCQlyTfEmReQ_T9pYnPJQ'};
 const syncOn=/^https:\/\//.test(SYNC.url)&&SYNC.key.length>20;
 const UKEY='musawi-qbank-uid',NKEY='musawi-qbank-user';
 let restoreNext=false,user=null,syncMsg='',syncT,syncBusy=false,syncAgain=false,lastSent='',authOpen=false,authMsg='',authBusy=false;
@@ -800,7 +800,7 @@ function initSync(){
 }
 document.addEventListener('visibilitychange',()=>{syncNow();if(document.visibilityState==='visible')checkUpdate()});
 /* ---------- auto-update: reload when a newer build is published ---------- */
-const BUILD='20261108-3';
+const BUILD='20261108-5';
 async function checkUpdate(){
   try{
     if(!/^https?:$/.test(location.protocol))return;
