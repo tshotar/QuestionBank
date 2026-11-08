@@ -150,10 +150,19 @@ h2{font-size:17px;font-weight:700;margin:0 0 12px}
 .flag svg{width:16px;height:16px}
 .flag[aria-pressed="true"]{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
 .btn.sm{font-size:15px;padding:12px 24px}
+.rsm{display:flex;flex-direction:column;gap:8px}
+.rsm .it{display:flex;gap:8px;align-items:stretch}
+.rsm .go{flex:1;display:flex;flex-direction:column;gap:3px;text-align:left;border:1.5px solid var(--line);background:var(--surface2);border-radius:14px;padding:11px 14px;min-width:0}
+.rsm .go b{font-size:15px;font-weight:700}
+.rsm .go span{font-size:12.5px;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
+.rsm .go .prog{height:6px;margin-top:4px}
+.rsm .x{flex:none;width:44px;border:1.5px solid var(--line);background:var(--surface);border-radius:14px;color:var(--muted);font-size:20px;line-height:1}
 .nav{display:flex;flex-wrap:wrap;gap:8px;padding:6px;margin:-4px}
 .nav button{width:34px;height:34px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface2);font-size:12px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;padding:0}
 .nav button[data-s="ok"]{background:var(--good-soft);color:var(--good);border-color:var(--good)}
 .nav button[data-s="no"]{background:var(--bad-soft);color:var(--bad);border-color:var(--bad)}
+.nav button{position:relative}
+.nav .fl{position:absolute;top:-6px;right:-6px;width:15px;height:15px;color:var(--bad);pointer-events:none;filter:drop-shadow(0 0 1.5px var(--surface))}
 .nav button[aria-current="true"]{outline:2px solid var(--accent);outline-offset:2px}
 
 /* lists by subject */
@@ -210,6 +219,8 @@ html.fit .app{height:100%}
 <!-- HOME / GENERATE -->
 <section id="vGen" class="app" aria-label="Generate quiz">
   <div class="tiles top3" id="stats"></div>
+
+  <div class="card" id="resume" hidden></div>
 
   <div class="card">
     <input class="search" id="qs" type="search" placeholder="Search questions, answers, explanations, notes" aria-label="Search questions" autocomplete="off" style="margin:0">
@@ -343,13 +354,7 @@ function counts(){
 function renderStats(){
   const n=counts();
   $('#stats').innerHTML=`<button class="tile ok" data-l="c"><b>${n.c}</b><span>Correct</span></button><button class="tile no" data-l="i"><b>${n.i}</b><span>Incorrect</span></button><button class="tile mk" data-l="m"><b>${n.m}</b><span>Marked</span></button>`;
-  $('#stats').querySelectorAll('.tile').forEach(b=>b.onclick=()=>{
-    const k=b.dataset.l;
-    if(k==='m')return openList(k);
-    const list=Q.filter(q=>inList(q,k));
-    if(!list.length)return openList(k);
-    openCur({list,ans:list.map(fromStore),idx:0,mode:'review',back:'gen'});
-  });
+  $('#stats').querySelectorAll('.tile').forEach(b=>b.onclick=()=>openList(b.dataset.l));
   $('#foot').innerHTML='<button class="link" id="rs">Reset all progress</button>';
   $('#rs').onclick=()=>{$('#foot').innerHTML='<span class="confirm">Erase every answer? Marks and notes stay.<button id="rsN">Cancel</button><button class="danger" id="rsY">Erase</button></span>';
     $('#rsN').onclick=renderStats;
@@ -370,6 +375,7 @@ function renderTabs(){
   box.insertBefore(rf,col);
   col.setAttribute('aria-expanded',String(open));
 }
+function subjInc(){const c=new Array(DATA.subjects.length).fill(0);Q.forEach(q=>{if((store[q.id]||{}).s==='i')c[q.sub]++});return c}
 function subjAnswered(){const c=new Array(DATA.subjects.length).fill(0);Q.forEach(q=>{if(answered(q))c[q.sub]++});return c}
 function renderPanel(){
   const p=$('#panel');
@@ -377,7 +383,7 @@ function renderPanel(){
   const list=ITEMS[tab];
   const ql=query.trim().toLowerCase();
   const shown=ql?list.filter(x=>x.l.toLowerCase().includes(ql)):list;
-  const ans=tab==='subjects'?subjAnswered():null;
+  const ans=tab==='subjects'?subjAnswered():null,incs=tab==='subjects'?subjInc():null;
   let h='';
   if(list.length>12)h+=`<input class="search" id="search" type="search" placeholder="Search ${TABS.find(t=>t[0]===tab)[1].toLowerCase()}" value="${esc(query)}" aria-label="Search">`;
   h+='<div class="list" role="group">';
@@ -386,7 +392,7 @@ function renderPanel(){
     let rst='';
     if(ans&&ans[x.k]){
       rst=resetK===x.k
-        ?`<span class="rconf">Reset ${ans[x.k]} answers?<button data-a="no">Cancel</button><button class="danger" data-a="yes" data-k="${x.k}">Reset</button></span>`
+        ?`<span class="rconf">Reset which answers?<button data-a="no">Cancel</button>${incs[x.k]?`<button class="danger" data-a="inc" data-k="${x.k}">Incorrect (${incs[x.k]})</button>`:''}<button class="danger" data-a="yes" data-k="${x.k}">All (${ans[x.k]})</button></span>`
         :`<button class="rst" data-r="${x.k}" aria-label="Reset progress for ${esc(x.l)}">Reset</button>`;
     }
     const row=`<button class="row" role="checkbox" aria-checked="${on}" data-k="${x.k}"><span class="radio"></span><span class="lbl">${esc(x.l)}</span><span class="ct">${x.n}</span></button>`;
@@ -403,7 +409,7 @@ function renderPanel(){
   });
   p.querySelectorAll('.rst').forEach(b=>b.onclick=()=>{resetK=+b.dataset.r;renderPanel()});
   p.querySelectorAll('.rconf button').forEach(b=>b.onclick=()=>{
-    if(b.dataset.a==='yes'){const k=+b.dataset.k;Q.forEach(q=>{if(q.sub===k&&store[q.id]){delete store[q.id].s;delete store[q.id].a}});save();resetK=null;renderAll()}
+    if(b.dataset.a==='yes'||b.dataset.a==='inc'){const k=+b.dataset.k,onlyInc=b.dataset.a==='inc';Q.forEach(q=>{const x=store[q.id];if(q.sub===k&&x&&(!onlyInc||x.s==='i')){delete x.s;delete x.a}});save();resetK=null;renderAll()}
     else{resetK=null;renderPanel()}
   });
   const c=$('#clr');if(c)c.onclick=()=>{sel[tab].clear();renderTabs();renderPanel();updateCount()};
@@ -436,7 +442,7 @@ $('#count').oninput=e=>{e.target.dataset.touched='1';updateCount()};
 $('#up').onclick=()=>{const c=$('#count');c.dataset.touched='1';c.value=Math.min(maxN(),(parseInt(c.value,10)||0)+1);updateCount()};
 $('#dn').onclick=()=>{const c=$('#count');c.dataset.touched='1';c.value=Math.max(0,(parseInt(c.value,10)||0)-1);updateCount()};
 $('#collapse').onclick=()=>{open=!open;renderTabs();renderPanel()};
-function renderAll(){renderStats();renderTabs();renderPanel();renderTypes();updateCount()}
+function renderAll(){renderStats();renderResume();renderTabs();renderPanel();renderTypes();updateCount()}
 
 /* ---------- views ---------- */
 const vs={gen:$('#vGen'),list:$('#vList'),quiz:$('#vQuiz'),res:$('#vRes')};
@@ -467,6 +473,7 @@ $('#qs').oninput=()=>{clearTimeout(qsT);qsT=setTimeout(runSearch,200)};
 
 /* ---------- lists: subjects -> questions ---------- */
 const LISTS={c:'Correct',i:'Incorrect',m:'Marked'};
+const FLAGI='<svg class="fl" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>';
 const CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
 let listKind=null,listSub=null,askReset=null;
 const inList=(q,k)=>{const s=store[q.id]||{};return k==='m'?!!s.m:s.s===k};
@@ -524,6 +531,52 @@ $('#lBack').onclick=()=>{
   else{renderAll();show('gen')}
 };
 
+/* ---------- saved bundles (continue later) ---------- */
+const SKEY='musawi-qbank-sessions-v1';
+let sessions=[];try{sessions=JSON.parse(localStorage.getItem(SKEY)||'[]')||[]}catch(e){sessions=[]}
+const saveSess=()=>{try{localStorage.setItem(SKEY,JSON.stringify(sessions))}catch(e){}};
+let sessT;
+function syncSess(now){
+  if(!cur||cur.mode!=='live'||!cur.sid)return;
+  const doIt=()=>{
+    if(!cur||cur.mode!=='live'||!cur.sid)return;
+    let s=sessions.find(x=>x.sid===cur.sid);
+    if(!s){s={sid:cur.sid,t0:Date.now()};sessions.push(s)}
+    s.ids=cur.list.map(q=>q.id);s.a=cur.ans.map(a=>[a.sel,a.done?1:0]);s.idx=cur.idx;s.t=Date.now();
+    saveSess();
+  };
+  clearTimeout(sessT);now?doIt():sessT=setTimeout(doIt,300);
+}
+function dropSess(sid){clearTimeout(sessT);sessions=sessions.filter(x=>x.sid!==sid);saveSess()}
+const flushAll=()=>{save();syncSess(true)};
+window.addEventListener('pagehide',flushAll);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushAll()});
+let askDrop=null;
+function renderResume(){
+  const box=$('#resume');
+  sessions=sessions.filter(s=>s.ids&&s.ids.some(id=>byId.has(id)));
+  if(!sessions.length){box.hidden=true;box.innerHTML='';return}
+  box.hidden=false;
+  const fmt=t=>new Date(t).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  const rows=sessions.slice().sort((a,b)=>b.t-a.t).map(s=>{
+    const tot=s.ids.length,done=s.a.filter(a=>a&&a[1]).length;
+    if(askDrop===s.sid)return `<div class="it"><span class="confirm" style="flex:1">Discard this bundle?<button data-c="no">Cancel</button><button class="danger" data-c="yes" data-sid="${s.sid}">Discard</button></span></div>`;
+    return `<div class="it"><button class="go" data-sid="${s.sid}"><b>${plural(tot,'question')}</b><span>${done} of ${tot} answered · ${fmt(s.t)}</span><div class="prog"><i style="width:${done/tot*100}%"></i></div></button><button class="x" data-d="${s.sid}" aria-label="Discard bundle">×</button></div>`;
+  }).join('');
+  box.innerHTML=`<h2>Continue</h2><div class="rsm">${rows}</div>`;
+  box.querySelectorAll('.go').forEach(b=>b.onclick=()=>resumeSess(b.dataset.sid));
+  box.querySelectorAll('.x').forEach(b=>b.onclick=()=>{askDrop=b.dataset.d;renderResume()});
+  box.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{if(b.dataset.c==='yes')dropSess(b.dataset.sid);askDrop=null;renderResume()});
+}
+function resumeSess(sid){
+  const s=sessions.find(x=>x.sid===sid);if(!s)return;
+  const list=[],ans=[];
+  s.ids.forEach((id,i)=>{const q=byId.get(id);if(q){const a=s.a[i]||[null,0];list.push(q);ans.push({sel:a[0],done:!!a[1]})}});
+  if(!list.length){dropSess(sid);renderResume();return}
+  quiz={list,ans,idx:Math.min(Math.max(0,s.idx|0),list.length-1),mode:'live',sid};
+  openCur(quiz);
+}
+
 /* ---------- quiz ---------- */
 let quiz=null,cur=null;
 function fromStore(q){
@@ -535,8 +588,8 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random
 $('#go').onclick=()=>{
   const n=Math.min(maxN(),parseInt($('#count').value,10)||0);if(n<1)return;
   const list=shuffle(pool.slice()).slice(0,n);
-  quiz={list,ans:list.map(()=>({sel:null,done:false})),idx:0,mode:'live'};
-  openCur(quiz);
+  quiz={list,ans:list.map(()=>({sel:null,done:false})),idx:0,mode:'live',sid:Date.now().toString(36)+Math.random().toString(36).slice(2,6)};
+  openCur(quiz);syncSess(true);
 };
 function openCur(c){cur=c;show('quiz');renderQ()}
 function renderQ(){
@@ -572,6 +625,7 @@ function renderQ(){
   const sb=$('#submit');if(sb)sb.onclick=submit;
   const nx=$('#next');if(nx)nx.onclick=()=>{last?leave():go(idx+1)};
   renderNav();
+  syncSess();
 }
 function submit(){
   const {list,idx,ans}=cur,q=list[idx],a=ans[idx];if(a.sel===null||a.done)return;
@@ -583,16 +637,16 @@ function renderNav(){
   const mode0=cur.mode;
   const on=cur.mode!=='browse'&&cur.list.length>1&&cur.list.length<=(mode0==='review'?3000:300);
   card.hidden=!on;if(!on)return;
-  $('#qNav').innerHTML=cur.list.map((q,i)=>`<button data-i="${i}" data-s="${cur.ans[i].done?(cur.ans[i].sel===q.k?'ok':'no'):''}" aria-label="Question ${i+1}" ${i===cur.idx?'aria-current="true"':''}>${i+1}</button>`).join('');
+  $('#qNav').innerHTML=cur.list.map((q,i)=>`<button data-i="${i}" data-s="${cur.ans[i].done?(cur.ans[i].sel===q.k?'ok':'no'):''}" aria-label="Question ${i+1}${(store[q.id]||{}).m?' (flagged)':''}" ${i===cur.idx?'aria-current="true"':''}>${i+1}${(store[q.id]||{}).m?FLAGI:''}</button>`).join('');
   $('#qNav').querySelectorAll('button').forEach(b=>b.onclick=()=>go(+b.dataset.i));
 }
 function leave(){
   save();
   if(cur.back==='gen'){renderAll();show('gen')}
   else if(cur.mode==='browse'){renderList();show('list')}
-  else showResults();
+  else{if(cur.mode==='live'&&cur.sid){dropSess(cur.sid);cur.sid=null}showResults()}
 }
-$('#qExit').onclick=leave;
+$('#qExit').onclick=()=>{if(cur.mode==='live'&&cur.sid){syncSess(true);save();renderAll();show('gen')}else leave()};
 
 /* ---------- results (answered questions only) ---------- */
 function showResults(){
